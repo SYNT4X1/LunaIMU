@@ -1,0 +1,154 @@
+Most of this is taken directly from the mpu-6050 python file written. 
+what the library lacks in documentation it makes up for in comments.
+
+######
+
+# I2C Communication:
+
+The MPU-6050 uses I2C communication to send bytes of data in a stream to an adress similar to the publisher-topic-subscriber system in ros.
+
+Instead of:
+    publisher -> topic -> subscriber
+
+we use:
+    MPU-6050 -> Register Address -> Raspberry Pi 
+#    Slave                             Master
+
+in this case we stream/send data bytes to the register address (like a topic in ros) and programs can begin reading from that address (like a subscriber in ros) to obtain the data stream. However, the MPU-6050 and Raspi I2C Communication needs to be synced, meaning that both devices will have to acknowledge the others presence and send data in tandem with a clock cycle provided from the master to keep things efficient but also consistent. The clock in this case is set by the master, since the MPU does most of the processing on board and then releases the information as soon as it gets voltage. This allows the master to limit the amount of data being sent each clock cycle in case it starts to lag behind the rate of incoming data it's processing. 
+
+in general, the communcation stream will look something like this:
+
+#               <--  Set up  -->                 #                                  <--  Data Stream  -->                               #     End       # 
+Start Condition | Address Frame | Read/Write bit | ACK/NACK Bit | MPU-6050 DATA Byte | ACK/NACK Bit | MPU-6050 DATA Byte | ACK/NACK Bit | Stop Contion 
+#    RASPI      #   MPU-6050    #      READ      #      ACK     #       DATA         #     ACK      #        DATA        #     ACK      #    RASPI
+
+Start Condition: The SDA line switches from a high voltage level to a low voltage level before the SCL line switches from high to low.
+
+Stop Condition: The SDA line switches from a low voltage level to a high voltage level after the SCL line switches from low to high.
+
+Address Frame: A 7 or 10 bit sequence unique to each slave that identifies the slave when the master wants to talk to it.
+
+Read/Write Bit: A single bit specifying whether the master is sending data to the slave (low voltage level) or requesting data from it (high voltage level).
+
+ACK/NACK Bit: Each frame in a message is followed by an acknowledge/no-acknowledge bit. If an address frame or data frame was successfully received, an ACK bit is returned to the sender from the receiving device.
+
+
+# LIBRARY FUNCTIONS #
+
+Register - the address assigned to the I2C slave (MPU-6050)
+
+######
+# I2C
+
+# read_i2c_word(self, register) 
+    Read two i2c registers and combine them. Register -- the first register to read from. Returns the combined read results.
+
+
+######
+# TEMP 
+
+# get_temp(self, register)
+    Reads the temperature from the onboard temperature sensor of the MPU-6050. Returns the temperature in degrees Celcius.
+
+
+######
+# ACCELEROMETER
+
+# set_accel_range(self, accel_range):
+    Sets the range of the accelerometer to range. accel_range -- the range to set the accelerometer to. Using a pre-defined range is advised.
+
+# read_accel_range(self, raw = False):
+    Reads the range the accelerometer is set to. If raw is True, it will return the raw value from the ACCEL_CONFIG register
+    If raw is False, it will return an integer: -1, 2, 4, 8 or 16. When it returns -1 something went wrong. It's good practice to catch
+    -1 errors and create handling conditions
+
+# get_accel_data(self, g = False)
+    Gets and returns the X, Y and Z values from the accelerometer. If g is True, it will return the data in g. If g is False, it will return the data in m/s^2
+    Returns a dictionary with the measurement results.
+        
+
+######
+# GYROSCOPE
+
+# set_gyro_range(self, gyro_range):
+    Sets the range of the gyroscope to range. gyro_range -- the range to set the gyroscope to. Using a pre-defined range is advised.
+
+# read_gyro_range(self, raw = False):
+    Reads the range the gyroscope is set to. If raw is True, it will return the raw value from the GYRO_CONFIG register. If raw is False, it will return 250, 500, 1000, 2000 or -1. If the returned value is equal to -1 something went wrong.
+
+# get_gyro_data(self):
+    Gets and returns the X, Y and Z values from the gyroscope. Returns the read values in a dictionary.
+
+
+######
+# MISC
+
+# get_all_data(self):
+    Reads and returns all the available data.
+
+# set_filter_range(self, filter_range=FILTER_BW_256):
+    Sets the low-pass bandpass filter frequency.
+#   Filter Options: 
+        FILTER_BW_256=0x00
+        FILTER_BW_188=0x01
+        FILTER_BW_98=0x02
+        FILTER_BW_42=0x03
+        FILTER_BW_20=0x04
+        FILTER_BW_10=0x05
+        FILTER_BW_5=0x06
+
+
+######
+# PRE DEFINED CONSTANTS
+
+GRAVITIY_MS2 = 9.80665
+address = None
+bus = None
+
+# Scale Modifiers
+ACCEL_SCALE_MODIFIER_2G = 16384.0
+ACCEL_SCALE_MODIFIER_4G = 8192.0
+ACCEL_SCALE_MODIFIER_8G = 4096.0
+ACCEL_SCALE_MODIFIER_16G = 2048.0
+
+GYRO_SCALE_MODIFIER_250DEG = 131.0
+GYRO_SCALE_MODIFIER_500DEG = 65.5
+GYRO_SCALE_MODIFIER_1000DEG = 32.8
+GYRO_SCALE_MODIFIER_2000DEG = 16.4
+
+# Pre-defined ranges
+ACCEL_RANGE_2G = 0x00
+ACCEL_RANGE_4G = 0x08
+ACCEL_RANGE_8G = 0x10
+ACCEL_RANGE_16G = 0x18
+
+GYRO_RANGE_250DEG = 0x00
+GYRO_RANGE_500DEG = 0x08
+GYRO_RANGE_1000DEG = 0x10
+GYRO_RANGE_2000DEG = 0x18
+
+FILTER_BW_256=0x00
+FILTER_BW_188=0x01
+FILTER_BW_98=0x02
+FILTER_BW_42=0x03
+FILTER_BW_20=0x04
+FILTER_BW_10=0x05
+FILTER_BW_5=0x06
+
+# MPU-6050 Registers
+PWR_MGMT_1 = 0x6B
+PWR_MGMT_2 = 0x6C
+
+ACCEL_XOUT0 = 0x3B
+ACCEL_YOUT0 = 0x3D
+ACCEL_ZOUT0 = 0x3F
+
+TEMP_OUT0 = 0x41
+
+GYRO_XOUT0 = 0x43
+GYRO_YOUT0 = 0x45
+GYRO_ZOUT0 = 0x47
+
+ACCEL_CONFIG = 0x1C
+GYRO_CONFIG = 0x1B
+MPU_CONFIG = 0x1A
